@@ -113,4 +113,37 @@ call_user_func(function () {
         $maxConcurrency = (int) shell_exec("nproc 2>/dev/null") * 2;
         $maxConcurrency = $maxConcurrency > 0 ? $maxConcurrency : 8; // fallback to 8
     }
+
+    /**
+     * NOTE:
+     * memory usage of current process will highly affect performance of proc_open()
+     * since tasks jsonl file may be very large, we read it in 2 passes:
+     * - 1st pass for validation only
+     * - 2nd pass for creating jobs on the fly
+     * => to achieve lowest memory consumption
+     */
+
+    // generator for reading file line by line
+    // ref: https://www.php.net/manual/en/language.generators.overview.php#112985
+    function getLines($file) {
+        $fp = fopen($file, "r");
+        try {
+            $lineNumber = 0;
+            while (($line = fgets($fp)) !== false) {
+                yield ++$lineNumber => $line;
+            }
+        } finally {
+            fclose($fp);
+        }
+    }
+
+    // validate
+    foreach (getLines($tasksFilename) as $lineNumber => $line) {
+        $json = json_decode($line, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            exitError("Error: Invalid json in '{$tasksFilename}' on line {$lineNumber}: " . json_last_error_msg());
+        } else if (!isset($json["id"]) || !isset($json["cmd"])) {
+            exitError("Error: Missing 'id' or 'cmd' field in '{$tasksFilename}' on line {$lineNumber}");
+        }
+    }
 });
