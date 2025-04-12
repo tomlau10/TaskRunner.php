@@ -68,3 +68,40 @@ $taskRunner->runAndWait(function ($result, $completed, $total) use (&$sum) {
 
 echo "Sum: {$sum}\n";
 ```
+
+### Caveat: Pipe Buffer Limitations
+
+For maximum performance, TaskRunner only reads process output pipes after process completion, which can cause **deadlocks** if child processes generate more output than the OS pipe buffer size (typically 64KB on Linux).
+
+To circumvent this, redirect the output to a temporary file and read it in your callback:
+```php
+$taskRunner = new TaskRunner(4);
+
+// this will work (64KB output)
+$_1KB_str = str_repeat("a", 1024);
+$_64KB_outputCmd = "for i in `seq 64`; do printf '{$_1KB_str}'; done";
+$taskRunner->add("ok", $_64KB_outputCmd);
+
+// this will deadlock (64KB + 1 byte output)
+$taskRunner->add("deadlock", "{$_64KB_outputCmd}; printf 'a'");
+
+// solution: redirect large output to temporary file
+$tempFile = tempnam(sys_get_temp_dir(), "task_");
+$taskRunner->add("large_output@{$tempFile}", "({$_64KB_outputCmd}; printf 'a') > {$tempFile}");
+
+$taskRunner->runAndWait(function ($result) {
+    // extract file path from id if exist
+    list($id, $file) = explode("@", $result["id"]);
+    if ($file) {
+        // read temp file and clean up
+        $output = file_get_contents($file);
+        unlink($file);
+    } else {
+        $output = $result["stdout"];
+    }
+    echo "Task: {$id}\n\tOutput size: " . strlen($output) . " bytes\n";
+    // you will never see the output of "deadlock" task
+});
+
+echo "You will never see this message\n";   // because process deadlocked above
+```
