@@ -1,5 +1,81 @@
 <?php
 
+namespace TaskRunner;
+
+// simple wrapper class for easy use
+class TaskRunner {
+    private $parallel;
+    private $taskFile;
+    private $started = false;
+    private $totalTasks = 0;
+
+    function __construct($parallel) {
+        $this->parallel = $parallel;
+    }
+
+    function add($id, $cmd) {
+        if ($this->started) {
+            throw new \Exception("cannot add task to started runner");
+        } else if (!$this->taskFile) {
+            $this->taskFile = tmpfile();
+            if (!$this->taskFile) {
+                throw new \Exception("cannot create tmp file for writing tasks");
+            }
+        }
+        $jsonStr = json_encode([
+            "id" => $id,
+            "cmd" => $cmd,
+        ], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
+        fwrite($this->taskFile, "{$jsonStr}\n");
+        $this->totalTasks++;
+    }
+
+    function runAndWait($callback = null) {
+        if (!$this->taskFile) {
+            // no task is added
+            return;
+        } else if ($this->started) {
+            throw new \Exception("cannot re-run started runner");
+        }
+        $this->started = true;
+
+        // just do fflush() but not fclose() as tmp file will be removed when closed
+        fflush($this->taskFile);
+
+        // escape the path as may contain special character
+        $taskFilePath = stream_get_meta_data($this->taskFile)["uri"];
+        $escapedTaskFilePath = escapeshellarg($taskFilePath);
+
+        // execute current php file
+        $escapedCurrentFilePath = escapeshellarg(__FILE__);
+        $handle = popen("php -f {$escapedCurrentFilePath} tasks={$escapedTaskFilePath} parallel={$this->parallel}", "r");
+        try {
+            $completedTasks = 0;
+            while (($jsonStr = fgets($handle)) !== false) {
+                $result = json_decode($jsonStr, true);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    throw new \Exception("json decode error");
+                } else if (isset($result["error"])) {
+                    // fatal error
+                    throw new \Exception($result["error"]);
+                }
+                $completedTasks++;
+                if ($callback) {
+                    call_user_func($callback, $result, $completedTasks, $this->totalTasks);
+                }
+            }
+        } finally {
+            pclose($handle);
+            fclose($this->taskFile);
+
+            // reset status
+            $this->taskFile = null;
+            $this->started = false;
+            $this->totalTasks = 0;
+        }
+    }
+}
+
 // process pool implementation
 class ProcessPool {
     private $processes = [];
@@ -75,6 +151,12 @@ class ProcessPool {
     function waitFinish() {
         $this->waitJob(true);
     }
+}
+
+// check if executed directly
+// ref: https://stackoverflow.com/a/20936930
+if (get_included_files()[0] !== __FILE__) {
+    return;
 }
 
 // entrypoint
