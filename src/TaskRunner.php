@@ -76,3 +76,41 @@ class ProcessPool {
         $this->waitJob(true);
     }
 }
+
+// entrypoint
+call_user_func(function () {
+    global $argc, $argv, $_GET;
+
+    // parse command line arguments into the $_GET
+    // ref: https://www.php.net/manual/en/features.commandline.php#108883
+    if ($argc > 1) {
+        parse_str(implode("&", array_slice($argv, 1)), $_GET);
+    }
+
+    function exitError($message) {
+        $jsonStr = json_encode(["error" => $message], JSON_UNESCAPED_SLASHES);
+        echo "{$jsonStr}\n";
+        exit(1);
+    }
+
+    // check required 'tasks' param
+    if (!isset($_GET["tasks"]) || strlen($_GET["tasks"]) == 0) {
+        exitError("Usage: php " . $argv[0] . " tasks=xxx.jsonl [parallel=n]");
+    }
+    $tasksFilename = $_GET["tasks"];
+    if (!is_file($tasksFilename) || !is_readable($tasksFilename)) {
+        exitError("Error: can't open '{$tasksFilename}': No such file or not readable");
+    }
+
+    // check optional 'parallel' param
+    if (isset($_GET["parallel"])) {
+        $maxConcurrency = ctype_digit($_GET["parallel"]) ? (int) $_GET["parallel"] : 0;
+        if ($maxConcurrency < 1) {
+            exitError("Error: 'parallel' value must be an integer >= 1");
+        }
+    } else {
+        // default to number of CPU cores * 2
+        $maxConcurrency = (int) shell_exec("nproc 2>/dev/null") * 2;
+        $maxConcurrency = $maxConcurrency > 0 ? $maxConcurrency : 8; // fallback to 8
+    }
+});
