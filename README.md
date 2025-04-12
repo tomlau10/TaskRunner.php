@@ -15,3 +15,15 @@ After investigation, we identified that the bottleneck was in PHP5's `proc_open(
 This overhead effectively negated much of the performance benefit we expected from parallel processing. The traditional process pool approach became increasingly inefficient as memory usage grew.
 
 > **Note:** [PHP 8.3 added usage of `posix_spawn` for `proc_open`](https://www.php.net/ChangeLog-8#:~:text=Added%20usage%20of-,posix_spawn,-for%20proc_open%20when) which addresses this problem completely. If you're using PHP 8.3+, you should just use the native process pool implementation.
+
+## Solution
+
+TaskRunner.php takes the following approach:
+
+1. **Separate Process**: TaskRunner runs the process pool in a completely separate PHP process with minimal memory footprint, dramatically reducing fork overhead.
+
+2. **Task Passing Using JSONL**: Tasks are serialized to a temporary file in JSONL format, allowing workers to read incrementally and reducing memory usage versus loading all tasks at once.
+
+3. **Streamlined Results Handling**: Each completed task outputs results as JSON to stdout, where the parent process captures and decodes them, providing a clean data exchange mechanism.
+
+This architecture minimizes the fork overhead, no matter what the memory level of the parent process. By adopting this solution, the processing time of the aforementioned case was **reduced from `40` minutes to approximately `3` minutes**, showcasing a dramatic improvement in efficiency.
