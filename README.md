@@ -27,3 +27,44 @@ TaskRunner.php takes the following approach:
 3. **Streamlined Results Handling**: Each completed task outputs results as JSON to stdout, where the parent process captures and decodes them, providing a clean data exchange mechanism.
 
 This architecture minimizes the fork overhead, no matter what the memory level of the parent process. By adopting this solution, the processing time of the aforementioned case was **reduced from `40` minutes to approximately `3` minutes**, showcasing a dramatic improvement in efficiency.
+
+## Basic Usage
+
+```php
+// just copy the `src/TaskRunner.php` to your project and require it
+require "TaskRunner.php";
+use TaskRunner\TaskRunner;
+
+// initialize TaskRunner with desired concurrency level
+$taskRunner = new TaskRunner(8);    // max concurrency = 8
+
+// add tasks to runner, tasks are serialized and written to a temporary JSONL file (non-blocking)
+for ($i = 0; $i < 100; $i++) {
+    $taskRunner->add(
+        "task_{$i}",    // task id (will be included in result)
+        "echo {$i}"     // shell command to execute
+    );
+}
+
+$sum = 0;
+
+// start execution of all tasks and wait for completion (blocking)
+// process results with an optional callback function
+$taskRunner->runAndWait(function ($result, $completed, $total) use (&$sum) {
+    // each result contains:
+    $id = $result["id"];            // task id you provided
+    $status = $result["status"];    // exit code of the command
+    $stdout = $result["stdout"];    // command output (stdout)
+    $stderr = $result["stderr"];    // error output (stderr)
+
+    // process the result
+    $sum += (int) $stdout;
+    
+    // optional: display progress
+    if ($completed % 10 == 0 || $completed == $total) {
+        echo "Progress: {$completed}/{$total}\n";
+    }
+});
+
+echo "Sum: {$sum}\n";
+```
