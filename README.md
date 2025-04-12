@@ -1,6 +1,18 @@
 # TaskRunner.php
 A process pool implementation with minimized forking overhead for high memory usage PHP5 apps, by running in a separate process.
 
+## Table of Contents
+
+1. [The Problem](#the-problem)
+2. [Solution](#solution)
+3. [Basic Usage](#basic-usage)
+    - [Caveat: Pipe Buffer Limitations](#caveat-pipe-buffer-limitations)
+4. [Benchmarks](#benchmarks)
+    - [Benchmark Environment](#benchmark-environment)
+    - [Benchmark Results](#benchmark-results)
+    - [Analysis](#analysis)
+5. [Conclusion](#conclusion)
+
 ## The Problem
 
 In a PHP5 workflow processing system handling around 170,000 tasks, we encountered severe performance bottlenecks despite using a traditional process pool implementation. On an 8-core VM, the entire workflow required approximately 40 minutes to complete, resulting in a throughput of only 70 tasks per second.
