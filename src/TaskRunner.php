@@ -146,4 +146,22 @@ call_user_func(function () {
             exitError("Error: Missing 'id' or 'cmd' field in '{$tasksFilename}' on line {$lineNumber}");
         }
     }
+
+    $collectJob = function ($id, $status, $stdout, $stderr) {
+        $jsonOutput = json_encode([
+            "id" => $id,
+            "status" => $status,
+            "stdout" => $stdout,
+            "stderr" => $stderr,
+        ], JSON_UNESCAPED_SLASHES);
+        echo "{$jsonOutput}\n";
+    };
+
+    // add all jobs from tasks, and wait for finish
+    $processPool = new ProcessPool($maxConcurrency);
+    foreach (getLines($tasksFilename) as $line) {
+        $json = json_decode($line, true);
+        $processPool->addJob($json["id"], $json["cmd"], $collectJob);
+    }
+    $processPool->waitFinish();
 });
