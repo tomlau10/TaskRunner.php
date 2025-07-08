@@ -1,0 +1,21 @@
+{
+    "$schema": "https://raw.githubusercontent.com/composer/composer/main/res/composer-schema.json",
+    "name": "tomlau10/task-runner",
+    "description": "A process pool implementation with minimized forking overhead for high memory usage PHP5 apps, by running in a separate process.",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Tom Lau",
+            "email": "tomandfatboy@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=5.6"
+    },
+    "autoload": {
+        "psr-4": {
+            "TaskRunner\\": "src/"
+        }
+    }
+}
